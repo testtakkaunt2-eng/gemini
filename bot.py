@@ -15,6 +15,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+# Token loglarda ochiq chiqib ketmasligi uchun httpx INFO loglarini o'chiramiz
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -50,7 +52,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         reply_text = response.text or "Javob bo'sh qaytdi."
 
-        # Telegram 4096 belgi cheklovidan oshsa bo'lib yuborish
         for i in range(0, len(reply_text), 4096):
             await update.message.reply_text(reply_text[i : i + 4096])
     except Exception as e:
@@ -59,13 +60,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 def main() -> None:
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_TOKEN)
+        .connect_timeout(30.0)
+        .read_timeout(30.0)
+        .write_timeout(30.0)
+        .pool_timeout(30.0)
+        .get_updates_connect_timeout(30.0)
+        .get_updates_read_timeout(30.0)
+        .build()
+    )
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Bot ishga tushdi...")
-    app.run_polling()
+    app.run_polling(
+        bootstrap_retries=-1,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":
     main()
+    
